@@ -47,8 +47,25 @@ BARRIER_SPIN_COUNT :: 8 * 1024;
     }
 } else {
     #if OS == .WINDOWS {
-        Windows :: #import "Windows";
-        kernel32 :: #library,system "kernel32";
+        Barrier :: struct {
+            platform_specific: SYNCHRONIZATION_BARRIER;
+            num_threads: s32;
+        }
+
+        barrier_init :: (barrier: *Barrier, count: s32) {
+            v := InitializeSynchronizationBarrier(*barrier.platform_specific, count, BARRIER_SPIN_COUNT);
+            barrier.num_threads = count;
+        }
+
+        barrier_release :: (barrier: *Barrier) {
+            if barrier.num_threads <= 1 then return;
+            v := DeleteSynchronizationBarrier(*barrier.platform_specific);
+        }
+
+        barrier_wait :: (barrier: *Barrier) {
+            NO_DELETE_FLAG : u32 : 0x4;
+            v := EnterSynchronizationBarrier(*barrier.platform_specific, NO_DELETE_FLAG);
+        }
 
         ULONG_PTR :: u64;
         LONG :: s32;
@@ -61,26 +78,14 @@ BARRIER_SPIN_COUNT :: 8 * 1024;
             Reserved5: Windows.DWORD;
         }
 
+
+        #scope_file
+        Windows :: #import "Windows";
+        kernel32 :: #library,system "kernel32";
+
         InitializeSynchronizationBarrier :: (lpBarrier: *SYNCHRONIZATION_BARRIER, lTotalThreads: LONG, lSpinCount: LONG) -> Windows.BOOL #foreign kernel32;
         DeleteSynchronizationBarrier :: (lpBarrier: *SYNCHRONIZATION_BARRIER) -> Windows.BOOL #foreign kernel32;
         EnterSynchronizationBarrier :: (lpBarrier: *SYNCHRONIZATION_BARRIER, dwFlags: Windows.DWORD) -> Windows.BOOL #foreign kernel32;
-
-        Barrier :: struct {
-            platform_specific: SYNCHRONIZATION_BARRIER;
-        }
-
-        barrier_init :: (barrier: *Barrier, count: s32) {
-            v := InitializeSynchronizationBarrier(*barrier.platform_specific, count, BARRIER_SPIN_COUNT);
-        }
-
-        barrier_release :: (barrier: *Barrier) {
-            v := DeleteSynchronizationBarrier(*barrier.platform_specific);
-        }
-
-        barrier_wait :: (barrier: *Barrier) {
-            NO_DELETE_FLAG : u32 : 0x4;
-            v := EnterSynchronizationBarrier(*barrier.platform_specific, NO_DELETE_FLAG);
-        }
     } else {
         #import "POSIX";
 

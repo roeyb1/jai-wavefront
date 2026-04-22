@@ -1,6 +1,6 @@
 #module_parameters(
     CHECK_DIVERGENCE := false,
-    USE_OS_BARRIER   := false
+    USE_OS_BARRIER   := true
 );
 
 Wavefront :: struct {
