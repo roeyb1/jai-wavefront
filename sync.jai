@@ -25,12 +25,31 @@ BARRIER_SPIN_COUNT :: 8 * 1024;
     barrier_wait :: (barrier: *Barrier) {
         if barrier.num_threads <= 1 then return;
 
-        #asm { mfence; }
+        #if CPU == .X64 {
+            #asm { mfence; }
+        } else #if CPU == .ARM64 {
+            // The data memory barrier ensures that all preceding writes are issued before any subsequent memory
+            // operations (including speculative memory access). In acquire/release terms, it is a full barrier. The
+            // instruction does not stall execution; it just tells the memory controller to preserve externally-visible
+            // ordering. - https://devblogs.microsoft.com/oldnewthing/20220812-00/?p=106968
+            #bytes .[0xBF, 0x3B, 0x03, 0xD5]; // dmb ish; data memory barrier
+        } else {
+            #assert("Unsupported CPU");
+        }
+
         local_gen := atomic_read(*barrier.generation_id);
         if atomic_add(*barrier.count, 1) + 1 < barrier.num_threads {
             for 0..BARRIER_SPIN_COUNT-1 {
                 if atomic_read(*barrier.generation_id) != local_gen return;
-                #asm { pause; }
+
+                #if CPU == .X64 {
+                    #asm { pause; }
+                } else #if CPU == .ARM64 {
+                    // arm64 equivlent of x86's pause
+                    #bytes .[0x3F, 0x20, 0x03, 0xD5]; // YIELD
+                } else {
+                    #assert("Unsupported CPU");
+                }
             }
             lock(*barrier.mutex);
             while atomic_read(*barrier.generation_id) == local_gen {
@@ -86,6 +105,8 @@ BARRIER_SPIN_COUNT :: 8 * 1024;
         InitializeSynchronizationBarrier :: (lpBarrier: *SYNCHRONIZATION_BARRIER, lTotalThreads: LONG, lSpinCount: LONG) -> Windows.BOOL #foreign kernel32;
         DeleteSynchronizationBarrier :: (lpBarrier: *SYNCHRONIZATION_BARRIER) -> Windows.BOOL #foreign kernel32;
         EnterSynchronizationBarrier :: (lpBarrier: *SYNCHRONIZATION_BARRIER, dwFlags: Windows.DWORD) -> Windows.BOOL #foreign kernel32;
+    } else #if OS == .MACOS {
+        #assert(false, "macos doesn't support OS barriers, consider setting jai-wavefront's module parameter USE_OS_BARRIER to false");
     } else {
         #import "POSIX";
 
