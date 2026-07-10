@@ -174,7 +174,7 @@ for_expansion :: (info: leader, body: Code, flags: For_Flags) #expand {
     #if info.sync lane_sync();
 }
 
-wavefront_init :: (wavefront: *Wavefront, lane_proc: Thread_Proc, num_lanes: s32) -> [..] Thread {
+wavefront_init :: (wavefront: *Wavefront, lane_proc: Thread_Proc, num_lanes: s32, thread_name_prefix: string) -> [..] Thread {
     wavefront.count = num_lanes;
     barrier_init(*wavefront.barrier, num_lanes);
 
@@ -189,7 +189,7 @@ wavefront_init :: (wavefront: *Wavefront, lane_proc: Thread_Proc, num_lanes: s32
     wave_info.wavefront = wavefront;
 
     for * thread : threads {
-        thread_init(thread, lane_proc);
+        thread_init(thread, lane_proc, name = tprint("% %", thread_name_prefix, it_index));
         thread.starting_context.wave_info = wave_info;
         thread.starting_context.wave_info.lane_index = cast(s32) it_index;
     }
